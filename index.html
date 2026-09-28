@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>자산현황</title>
+<meta name="description" content="개인 자산·부채·해외주식·상환 시뮬레이션 — 기기 저장과 비공개 저장소 자동 동기화">
+<meta name="theme-color" content="#13171F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="자산현황">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{
+  --paper:#E9ECEF; --surface:#FFFFFF; --ink:#13171F; --ink-2:#48525F; --ink-3:#6F7985;
+  --line:#D2D8DE; --line-2:#E8EBEE;
+  --debt:#B03A48; --debt-w:#F8EAEC; --asset:#146B63; --asset-w:#E3F0EE;
+  --accent:#3E4CB8; --accent-w:#EAECF8; --amber:#A96E12; --amber-w:#FBF2E2;
+  --c1:#146B63; --c2:#3E4CB8; --c3:#B8791B; --c4:#8A4FA8; --c5:#2C7EA8; --c6:#A85A2C; --c7:#6B7280;
+  --font:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","맑은 고딕","Segoe UI",system-ui,sans-serif;
+  --num:"SF Mono","Consolas","D2Coding","Menlo",ui-monospace,monospace;
+  --navh:60px;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+input[type=number]{-moz-appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* ── 상단 ── */
+header.top{background:var(--ink);color:#fff;padding-top:var(--sat);position:sticky;top:0;z-index:40}
+.top-in{max-width:1520px;margin:0 auto;padding:10px 20px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+.top-in h1{margin:0;font-size:18px;font-weight:800;letter-spacing:-.03em;white-space:nowrap}
+.top-r{display:flex;gap:8px;align-items:center;min-width:0}
+.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid #3D4756;background:transparent;color:#D5DBE3;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:62vw;overflow:hidden;text-overflow:ellipsis}
+.pill i{width:8px;height:8px;border-radius:50%;background:#8E9AA8;flex:0 0 8px}
+.pill[data-s=pending] i{background:#E0A43A} .pill[data-s=syncing] i{background:#7F8CF0}
+.pill[data-s=synced] i{background:#3FB39F} .pill[data-s=error] i,.pill[data-s=conflict] i{background:#E86673}
+.pill[data-s=conflict],.pill[data-s=error]{border-color:#E86673;color:#FFD5DA}
+.iconbtn{border:1px solid #3D4756;background:transparent;color:#D5DBE3;border-radius:6px;width:34px;height:32px;cursor:pointer;font-size:17px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.iconbtn:hover,.pill:hover{background:#222A36}
+
+/* ── 탭 (데스크톱: 상단 / 모바일: 하단) ── */
+nav.tabs{background:var(--ink);border-bottom:3px solid var(--accent)}
+.tabs-in{max-width:1520px;margin:0 auto;padding:0 20px;display:flex;gap:2px}
+.tabs button{background:transparent;border:0;border-bottom:3px solid transparent;margin-bottom:-3px;color:#8E9AA8;padding:9px 16px;cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap;display:flex;align-items:center;gap:7px}
+.tabs button svg{width:17px;height:17px;flex:0 0 17px}
+.tabs button:hover{color:#D5DBE3}
+.tabs button[aria-selected=true]{color:#fff;border-bottom-color:#fff}
+
+.btn{border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:4px;cursor:pointer;font-weight:600;font-size:12.5px;white-space:nowrap}
+.btn:hover{background:#F3F5F7}
+.btn:focus-visible,.iconbtn:focus-visible,.pill:focus-visible,.tabs button:focus-visible{outline:2px solid #9AA6FF;outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#333FA0}
+.btn.danger{color:var(--debt);border-color:#E3B8BE}
+.btn.mini{padding:3px 8px;font-size:11.5px;line-height:1.6}
+.btn:disabled{opacity:.45;cursor:default}
+
+.wrap{max-width:1520px;margin:0 auto;padding:18px 20px 60px}
+.pane{display:none} .pane.on{display:block}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;margin-bottom:14px;overflow:hidden}
+.panel > h2{margin:0;padding:10px 14px;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--ink-2);border-bottom:1px solid var(--line-2);background:#FAFBFC;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.panel > h2 .hb{display:flex;gap:5px;text-transform:none;letter-spacing:0}
+.panel .pad{padding:13px 14px}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:14px}
+.kpi{background:var(--surface);padding:12px 14px;min-width:0}
+.kpi .k{font-size:10px;font-weight:800;letter-spacing:.09em;color:var(--ink-3);text-transform:uppercase}
+.kpi .v{font-family:var(--num);font-size:24px;font-weight:700;letter-spacing:-.035em;line-height:1.15;margin-top:4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kpi .v small{font-size:12px;font-weight:600;letter-spacing:0;margin-left:2px;color:var(--ink-3)}
+.kpi .s{font-size:11px;color:var(--ink-3);margin-top:3px}
+.kpi .v.debt{color:var(--debt)} .kpi .v.asset{color:var(--asset)} .kpi .v.mut{color:var(--ink)}
+.kpi.hero{grid-column:span 2} .kpi.hero .v{font-size:32px}
+
+/* 표 */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse}
+.tw table{min-width:600px}
+th{font-size:10px;letter-spacing:.06em;font-weight:800;color:var(--ink-2);text-align:right;padding:8px 10px;border-bottom:2px solid var(--ink);white-space:nowrap;background:#FAFBFC;text-transform:uppercase}
+th:first-child,td:first-child{text-align:left}
+td{padding:6px 10px;border-bottom:1px solid var(--line-2);text-align:right;font-family:var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{font-family:var(--font)}
+tbody tr:hover{background:#F6F9FA}
+td.d{color:var(--debt)} td.a{color:var(--asset)}
+tr.sub td{background:#FAFBFC;font-weight:800}
+tr.sub td:first-child{font-size:11px;letter-spacing:.05em;color:var(--ink-2)}
+tr.tot td{border-top:2px solid var(--ink);border-bottom:0;font-weight:800;font-size:14.5px;padding-top:9px}
+tr.ro td{color:var(--ink-2)}
+tr.ro .note-s{font-family:var(--font);font-size:11px;color:var(--ink-3)}
+.cellin{border:1px solid transparent;background:transparent;border-radius:3px;padding:4px 6px;width:100%;font-family:var(--num);text-align:right;font-variant-numeric:tabular-nums;min-width:0}
+.cellin.txt{font-family:var(--font);text-align:left}
+.cellin:hover{border-color:var(--line);background:#fff}
+.cellin:focus{outline:2px solid var(--accent);outline-offset:-1px;background:#fff;border-color:var(--accent)}
+select.cellin{border-color:var(--line-2);background:#fff;text-align:left;font-family:var(--font)}
+.fd input[type=month]{text-align:left;font-family:var(--font)}
+.xbtn{border:0;background:transparent;color:var(--ink-3);cursor:pointer;padding:4px 7px;border-radius:3px;font-size:13px}
+.xbtn:hover{background:var(--debt-w);color:var(--debt)}
+.tag{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;margin-left:5px;vertical-align:1px;font-family:var(--font)}
+.tag.small{background:var(--amber-w);color:var(--amber)}
+.tag.fxl{background:var(--debt-w);color:var(--debt)}
+
+/* 막대 */
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar .bl{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;margin-bottom:3px}
+.bar .bl b{font-weight:700}
+.bar .bl span{font-family:var(--num);color:var(--ink-2);font-variant-numeric:tabular-nums;text-align:right}
+.bar .bt{height:14px;background:var(--line-2);border-radius:3px;overflow:hidden}
+.bar .bf{height:100%;border-radius:3px}
+.stack{display:flex;height:24px;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+.stack div{height:100%}
+.slg{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;font-size:11px;color:var(--ink-2)}
+.slg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.meter{height:12px;background:var(--line-2);border-radius:6px;overflow:hidden;margin:8px 0 4px}
+.meter div{height:100%;background:var(--accent);border-radius:6px}
+.meter.full div{background:var(--debt)}
+
+svg.chart{display:block;width:100%;height:auto}
+.legend{display:flex;gap:14px;padding:2px 14px 12px;font-size:11px;color:var(--ink-2);flex-wrap:wrap}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* 폼 */
+.grp{margin:0 0 13px}.grp:last-child{margin-bottom:0}
+.grp .lg{font-size:10.5px;font-weight:800;letter-spacing:.09em;color:var(--ink-3);margin-bottom:6px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.row.one{grid-template-columns:1fr}.row.three{grid-template-columns:repeat(3,1fr)}
+.fd{display:flex;flex-direction:column;gap:3px;min-width:0}
+.fd label{font-size:10.5px;font-weight:700;color:var(--ink-2)}
+.fd .wrapi{position:relative;display:flex}
+.fd input,.fd select{border:1px solid var(--line);border-radius:4px;padding:7px 9px;width:100%;background:#fff;font-family:var(--num);text-align:right;font-variant-numeric:tabular-nums;min-width:0}
+.fd input[type=text],.fd input[type=password],.fd select{font-family:var(--font);text-align:left}
+.fd .unit{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:10.5px;color:var(--ink-3);pointer-events:none;background:#fff;padding-left:3px}
+.fd input.hasunit{padding-right:38px}
+.fd input:focus,.fd select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.fd .hint{font-size:10.5px;color:var(--ink-3)}
+.chk{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);margin-top:6px}
+.chk input{width:auto;margin:0}
+.derived{background:#F5F7F9;border:1px dashed var(--line);border-radius:4px;padding:7px 9px;margin-top:8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.derived .k{font-size:10.5px;font-weight:700;color:var(--ink-2)}
+.derived .v{font-family:var(--num);font-weight:700;font-variant-numeric:tabular-nums}
+.derived .v.neg{color:var(--debt)}
+
+/* 시뮬 */
+.simgrid{display:grid;grid-template-columns:344px 1fr;gap:16px;align-items:start}
+.simgrid > *{min-width:0}
+.prio{list-style:none;margin:0;padding:0;counter-reset:p}
+.prio li{counter-increment:p;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:4px;padding:6px 8px;margin-bottom:5px;background:#fff}
+.prio li::before{content:counter(p);font-family:var(--num);font-weight:700;font-size:11px;width:18px;height:18px;border-radius:3px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 18px}
+.prio .pn{flex:1;font-weight:600;font-size:12.5px}
+.prio .pb{display:flex;gap:4px}
+.evt{border:1px solid var(--line);border-radius:4px;padding:7px 8px;margin-bottom:6px;background:#FCFDFD}
+.evt .r1{display:grid;grid-template-columns:1fr 96px;gap:6px;margin-bottom:5px}
+.evt .r2{display:grid;grid-template-columns:118px 1fr auto;gap:6px;align-items:center}
+.evt input,.evt select{border:1px solid var(--line);border-radius:4px;padding:6px 7px;width:100%;background:#fff;min-width:0}
+.evt input[type=number]{font-family:var(--num);text-align:right}
+tr.cur{background:var(--accent-w)!important}
+tr.cur td:first-child{font-weight:800}
+.badge{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;background:var(--accent);color:#fff;margin-left:6px}
+tr.evtrow td:first-child::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:1px}
+details{border-top:1px solid var(--line-2)}
+details > summary{padding:11px 14px;cursor:pointer;font-size:12px;font-weight:700;color:var(--ink-2);list-style:none}
+details > summary::-webkit-details-marker{display:none}
+details > summary::before{content:"▸ ";color:var(--ink-3)}
+details[open] > summary::before{content:"▾ "}
+
+.note{padding:11px 14px;font-size:11.5px;line-height:1.65;border-radius:6px;border:1px solid;margin-bottom:14px}
+.note.warn{background:var(--amber-w);border-color:#EBDCBB;color:#5E3F06}
+.note.info{background:#F4F6F8;border-color:var(--line);color:var(--ink-2)}
+.note.bad{background:var(--debt-w);border-color:#EBC3C8;color:#6E1C27}
+.note.flat{border-radius:0;border:0;border-top:1px solid var(--line-2);margin:0}
+.note b{color:var(--ink)}
+.note ol{margin:5px 0 0;padding-left:17px} .note li{margin:2px 0}
+.note .act{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.empty{padding:28px 20px;text-align:center;color:var(--ink-3);font-size:12.5px}
+.toast{position:fixed;left:50%;bottom:calc(24px + var(--sab));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 17px;border-radius:6px;font-size:12.5px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .18s;z-index:90;max-width:calc(100vw - 32px);text-align:center}
+.toast.on{opacity:1}
+
+/* 시트(설정·충돌) */
+.sheet-bg{position:fixed;inset:0;background:rgba(19,23,31,.5);z-index:70;display:none;align-items:flex-end;justify-content:center}
+.sheet-bg.on{display:flex}
+@media (min-width:761px){.sheet-bg{align-items:center}}
+.sheetbox{background:var(--surface);width:100%;max-width:560px;max-height:calc(100vh - 40px);overflow:auto;border-radius:12px 12px 0 0;padding:0 0 calc(16px + var(--sab))}
+@media (min-width:761px){.sheetbox{border-radius:10px}}
+.sheetbox header{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--line-2);padding:13px 16px;display:flex;justify-content:space-between;align-items:center;z-index:1}
+.sheetbox header h3{margin:0;font-size:15px;letter-spacing:-.02em}
+.sheetbox section{padding:14px 16px;border-bottom:1px solid var(--line-2)}
+.sheetbox section:last-child{border-bottom:0}
+.sheetbox h4{margin:0 0 9px;font-size:11px;font-weight:800;letter-spacing:.09em;color:var(--ink-3);text-transform:uppercase}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.stline{font-size:12.5px;padding:9px 11px;border-radius:5px;background:#F4F6F8;color:var(--ink-2);margin-bottom:10px}
+.stline[data-s=synced]{background:var(--asset-w);color:#0D4A44}
+.stline[data-s=error],.stline[data-s=conflict]{background:var(--debt-w);color:#6E1C27}
+.stline[data-s=offline],.stline[data-s=pending]{background:var(--amber-w);color:#5E3F06}
+.steps{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--ink-2);line-height:1.75}
+.steps code{font-family:var(--num);background:#F1F3F5;padding:1px 4px;border-radius:3px;font-size:11.5px}
+.cf{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.cf > div{border:1px solid var(--line);border-radius:6px;padding:10px}
+.cfdiff{margin:4px 0 0;padding:0;list-style:none;font-size:12.5px;border:1px solid var(--line-2);border-radius:6px}
+.cfdiff li{display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line-2)}
+.cfdiff li:last-child{border-bottom:0}
+.cfdiff .m,.cfdiff .t{font-family:var(--num);font-variant-numeric:tabular-nums;text-align:right}
+.cfdiff .m{color:var(--accent)} .cfdiff .h{font-size:10.5px;font-weight:800;color:var(--ink-3);background:#FAFBFC}
+.cf .k{font-size:10.5px;font-weight:800;color:var(--ink-3);letter-spacing:.06em}
+.cf .v{font-family:var(--num);font-size:18px;font-weight:700;margin-top:3px}
+.cf .s{font-size:11px;color:var(--ink-3)}
+
+/* ── 모바일 ── */
+@media (max-width:760px){
+  body{font-size:14px;padding-bottom:calc(var(--navh) + var(--sab))}
+  .top-in{padding:9px 14px}
+  .wrap{padding:12px 12px 28px}
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;border-bottom:0;border-top:1px solid #2A3240;padding-bottom:var(--sab)}
+  .tabs-in{padding:0;gap:0;justify-content:space-around}
+  .tabs button{flex:1;flex-direction:column;gap:3px;padding:8px 2px 7px;font-size:10.5px;border-bottom:0;border-top:3px solid transparent;margin:0;height:var(--navh)}
+  .tabs button[aria-selected=true]{border-top-color:#fff;border-bottom:0}
+  .tabs button svg{width:21px;height:21px}
+  .toast{bottom:calc(var(--navh) + 14px + var(--sab))}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .kpi{padding:11px 12px}
+  .kpi .v{font-size:19px}
+  .kpi.hero .v{font-size:27px}
+  .row.three{grid-template-columns:1fr 1fr}
+  .simgrid{grid-template-columns:1fr}
+  .simgrid main{order:1} .simgrid aside{order:2}
+  /* 모바일에서 입력칸 16px — iOS 자동 확대 방지 */
+  input,select,.cellin,.fd input,.fd select,.evt input,.evt select{font-size:16px}
+  .btn{padding:9px 13px;font-size:13px}
+  .btn.mini{padding:6px 10px;font-size:12.5px}
+  .xbtn{padding:8px 11px;font-size:15px}
+  /* 편집표 → 카드 */
+  .cards thead{display:none}
+  .cards,.cards tbody{display:block;min-width:0!important}
+  .cards tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;padding:11px 12px;border-bottom:1px solid var(--line-2);position:relative}
+  .cards tr:hover{background:transparent}
+  .cards td{display:block;padding:0;border:0;text-align:left;white-space:normal;min-width:0}
+  .cards td[data-label]::before{content:attr(data-label);display:block;font-family:var(--font);font-size:10.5px;font-weight:700;color:var(--ink-3);margin-bottom:2px}
+  .cards td.c-name{grid-column:1 / -1;padding-right:42px}
+  .cards td.c-wide{grid-column:1 / -1}
+  .cards td.c-del{position:absolute;top:7px;right:6px}
+  .cards td.c-out{font-weight:700}
+  .cards .cellin{border-color:var(--line);background:#fff;padding:8px 9px}
+  .cards .cellin.txt{font-weight:700}
+  .cards tr.sub,.cards tr.tot{display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px}
+  .cards tr.sub td:not(:first-child):empty,.cards tr.tot td:not(:first-child):empty{display:none}
+  .cards tr.tot{border-top:2px solid var(--ink)}
+  .cards tr.tot td{border:0;padding:0}
+  .cards tr.ro{grid-template-columns:1fr auto}
+  .panel > h2{padding:11px 12px}
+  #tH tr{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px}
+  #tH td{order:10}
+  #tH td.c-name{grid-column:span 1;padding-right:0;order:1}
+  #tH td.c-grp{grid-column:span 1;order:2}
+  #tH td.c-del{position:static;order:3;align-self:end;justify-self:end}
+  #tH td.c-wide{grid-column:1 / -1}
+  #tH td.c-tax{grid-column:span 2}
+  #tH td.c-out{font-size:13px}
+  #tH td[data-label]::before{font-size:10px}
+  #tH tr.hz td.c-hide{display:none}
+  .sheetbox{max-height:calc(100vh - 24px - var(--sat))}
+}
+@media (max-width:380px){ .kpi .v{font-size:17px} .kpi.hero .v{font-size:24px} }
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{
+  nav.tabs,.top-r,.xbtn,.sheet-bg,details,.noprint{display:none!important}
+  header.top{position:static;background:#fff;color:#000;border-bottom:2px solid #000}
+  .pane{display:block!important;page-break-before:always}
+  .pane:first-of-type{page-break-before:auto}
+  .simgrid{grid-template-columns:1fr}
+  body{background:#fff;font-size:11px;padding:0}
+  .panel{break-inside:avoid;border-color:#999}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <h1>자산현황</h1>
+    <div class="top-r">
+      <button class="pill" id="syncPill" data-s="local" aria-label="동기화 상태 — 눌러서 설정"><i></i><span id="syncText">기기 저장</span></button>
+      <button class="iconbtn" id="bMenu" aria-label="설정 · 백업">⚙</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="화면 이동">
+  <div class="tabs-in" id="tabs" role="tablist">
+    <button role="tab" id="tb-p1" data-p="p1" aria-controls="p1" aria-selected="true" tabindex="0">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>현황</button>
+    <button role="tab" id="tb-p2" data-p="p2" aria-controls="p2" aria-selected="false" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>주식</button>
+    <button role="tab" id="tb-p3" data-p="p3" aria-controls="p3" aria-selected="false" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.5 6"/></svg>분석</button>
+    <button role="tab" id="tb-p4" data-p="p4" aria-controls="p4" aria-selected="false" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l5-5 4 3 8-8M15 7h5v5"/></svg>추이</button>
+    <button role="tab" id="tb-p5" data-p="p5" aria-controls="p5" aria-selected="false" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h16M6 16l4-8 4 5 4-9"/></svg>시뮬</button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- ═══ 현황 ═══ -->
+<div class="pane on" id="p1" role="tabpanel" aria-labelledby="tb-p1">
+  <div class="note warn" id="firstNote" style="display:none">
+    <b>처음 여셨습니다.</b> 항목 틀만 있고 금액은 모두 0입니다. 본인 숫자를 입력하거나, 받은 초기 파일이 있으면 <b>⚙ → 파일 가져오기</b>로 불러오십시오. 입력한 내용은 이 기기에 자동 저장됩니다.
+    <div class="act"><button class="btn mini" id="bFirstImport">파일 가져오기</button><button class="btn mini" id="bFirstClose">닫기</button></div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi hero"><div class="k">순자산</div><div class="v mut" id="kNet">-</div><div class="s" id="kNetS">&nbsp;</div></div>
+    <div class="kpi"><div class="k">총자산</div><div class="v asset" id="kAst">-</div><div class="s" id="kAstS">&nbsp;</div></div>
+    <div class="kpi"><div class="k">총부채</div><div class="v debt" id="kDbt">-</div><div class="s" id="kDbtS">&nbsp;</div></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="k">부채비율</div><div class="v mut" id="kRatio">-</div><div class="s">총부채 ÷ 총자산</div></div>
+    <div class="kpi"><div class="k">순부채</div><div class="v debt" id="kNetDebt">-</div><div class="s">총부채 − 현금성</div></div>
+    <div class="kpi"><div class="k">비상자금 커버</div><div class="v mut" id="kLiq">-</div><div class="s" id="kLiqS">현금성 ÷ 월 고정지출</div></div>
+    <div class="kpi"><div class="k">달러 노출</div><div class="v mut" id="kUsd">-</div><div class="s" id="kUsdS">&nbsp;</div></div>
+  </div>
+
+  <section class="panel">
+    <h2>기준 정보 <span class="hb"><button class="btn mini" id="bSnap">이번 달 기록 저장</button></span></h2>
+    <div class="pad">
+      <div class="row three">
+        <div class="fd"><label for="asOf">기준 연월</label><input id="asOf" type="month"><span class="hint">기록이 이 연월로 저장됩니다</span></div>
+        <div class="fd"><label for="fx">원/달러 환율</label><div class="wrapi"><input class="hasunit" id="fx" type="number" inputmode="decimal" step="0.1"><span class="unit">원</span></div></div>
+        <div class="fd"><label for="mExp">월 고정지출</label><div class="wrapi"><input class="hasunit" id="mExp" type="number" inputmode="decimal" step="10"><span class="unit">만원</span></div></div>
+      </div>
+      <div class="note warn" id="fxWarn" style="display:none;margin:10px 0 0">환율이 0이라 해외주식·달러 자산이 0원으로 계산됩니다. 환율을 입력하십시오.</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>자산 <span class="hb"><button class="btn mini" id="bAddA">＋ 자산</button></span></h2>
+    <div class="tw"><table class="cards" id="tA"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>부채 <span class="hb"><button class="btn mini" id="bAddD">＋ 부채</button></span></h2>
+    <div class="tw"><table class="cards" id="tD"></table></div>
+    <div class="note info flat">전세를 준 부동산은 <b>시세를 자산에, 받은 보증금을 임대보증금 부채에</b> 각각 넣어야 순자산이 맞습니다. 본인이 낸 거주 보증금은 자산(보증금)입니다.</div>
+  </section>
+</div>
+
+<!-- ═══ 주식 ═══ -->
+<div class="pane" id="p2" role="tabpanel" aria-labelledby="tb-p2">
+  <div class="note warn" id="yearNote" style="display:none"></div>
+
+  <div class="kpis">
+    <div class="kpi hero"><div class="k">해외주식 평가액</div><div class="v mut" id="hVal">-</div><div class="s" id="hValS">&nbsp;</div></div>
+    <div class="kpi"><div class="k">원화 평가손익</div><div class="v mut" id="hGain">-</div><div class="s" id="hGainS">&nbsp;</div></div>
+    <div class="kpi"><div class="k">환율 효과</div><div class="v mut" id="hFx">-</div><div class="s" id="hFxS">평단 입력 종목 합</div></div>
+  </div>
+
+  <section class="panel">
+    <h2>시세 기준</h2>
+    <div class="pad"><div class="row">
+      <div class="fd"><label for="fx2">원/달러 환율 (현황 탭과 같은 값)</label><div class="wrapi"><input class="hasunit" id="fx2" type="number" inputmode="decimal" step="0.1"><span class="unit">원</span></div></div>
+      <div class="fd"><label>갱신 방법</label><span class="hint" style="padding-top:6px">증권사 앱을 보면서 현재가와 환율만 고치면 됩니다. 저장은 자동입니다.</span></div>
+    </div></div>
+  </section>
+
+  <section class="panel">
+    <h2>양도세 공제 예산 <span class="hb" id="taxYearLbl"></span></h2>
+    <div class="pad">
+      <div class="row">
+        <div class="fd"><label for="taxRealized">올해 실현손익 (이익−손실)</label><div class="wrapi"><input class="hasunit" id="taxRealized" type="number" inputmode="numeric" step="1"><span class="unit">원</span></div>
+          <span class="hint">증권사 앱 양도소득 조회의 올해 순손익을 그대로</span></div>
+        <div class="fd"><label for="taxYear">과세연도</label><input id="taxYear" type="number" inputmode="numeric" step="1"></div>
+      </div>
+      <div class="meter" id="taxMeter"><div style="width:0%"></div></div>
+      <div class="row three" style="margin-top:6px">
+        <div class="derived" style="margin:0"><span class="k">공제 사용</span><span class="v" id="tUsed">-</span></div>
+        <div class="derived" style="margin:0"><span class="k">비과세 여유</span><span class="v" id="tRoom">-</span></div>
+        <div class="derived" style="margin:0"><span class="k">추정 세액</span><span class="v" id="tTax">-</span></div>
+      </div>
+      <div class="derived"><span class="k">지금 전부 팔면 올해 추정 세액</span><span class="v" id="tAll">-</span></div>
+    </div>
+    <div class="note info flat">기본공제 연 250만원, 세율 22%(양도소득세 20% + 지방소득세 2%), 과세연도는 결제일 기준 1.1~12.31, 신고는 다음 해 5월. 여기 세액은 <b>현재 환율을 매도일 환율 대신 쓰고 수수료를 빼지 않은 추정치</b>입니다.</div>
+  </section>
+
+  <section class="panel">
+    <h2>보유 종목 <span class="hb"><button class="btn mini" id="bAddH">＋ 종목</button></span></h2>
+    <div class="tw"><table class="cards" id="tH"></table></div>
+    <div class="note info flat"><b>원화 매입금액</b>은 증권사 앱 잔고의 "매입금액(원)"을 그대로 넣으십시오. 원화 손익과 세금이 이 값 기준입니다. <b>평단(USD)</b>까지 넣으면 손익을 주가 효과와 환율 효과로 나눠 보여줍니다. <b>팔면 세액</b>은 그 종목만 지금 전부 팔 때 올해 세금이 얼마나 늘거나(＋) 줄어드는지(−)입니다.</div>
+  </section>
+
+  <section class="panel">
+    <h2>그룹별 비중</h2>
+    <div class="pad"><div class="bars" id="barsG"></div></div>
+  </section>
+</div>
+
+<!-- ═══ 분석 ═══ -->
+<div class="pane" id="p3" role="tabpanel" aria-labelledby="tb-p3">
+  <section class="panel"><h2>자산 구성</h2><div class="pad"><div class="bars" id="barsA"></div></div></section>
+  <section class="panel"><h2>부채 구성</h2><div class="pad"><div class="bars" id="barsD"></div></div></section>
+  <section class="panel">
+    <h2>유동성 구간</h2>
+    <div class="pad">
+      <div class="stack" id="stackL"></div>
+      <div class="slg" id="stackLg"></div>
+      <div class="note info" style="margin:12px 0 0">즉시(현금성) · 단기(주식, 매도 후 인출까지 며칠) · 중기(실물, 매각 필요) · 제한(연금, 중도인출 시 세제 불이익) · 비유동(부동산·보증금). 급히 동원 가능한 범위를 가늠하는 용도입니다.</div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>집중도 · 통화</h2>
+    <div class="tw"><table id="tConc"></table></div>
+  </section>
+</div>
+
+<!-- ═══ 추이 ═══ -->
+<div class="pane" id="p4" role="tabpanel" aria-labelledby="tb-p4">
+  <div class="kpis">
+    <div class="kpi"><div class="k">기록 개월</div><div class="v mut" id="sN">-</div><div class="s" id="sRange">&nbsp;</div></div>
+    <div class="kpi"><div class="k">직전 대비 순자산</div><div class="v mut" id="sNet">-</div><div class="s" id="sNetS">&nbsp;</div></div>
+    <div class="kpi"><div class="k">직전 대비 자산</div><div class="v asset" id="sAst">-</div><div class="s">&nbsp;</div></div>
+    <div class="kpi"><div class="k">직전 대비 부채</div><div class="v debt" id="sDbt">-</div><div class="s">&nbsp;</div></div>
+  </div>
+  <section class="panel">
+    <h2>순자산 추이 <span class="hb"><button class="btn mini" id="bSnap2">이번 달 기록 저장</button></span></h2>
+    <div style="padding:8px 6px 4px"><svg class="chart" id="chartS" viewBox="0 0 940 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="순자산 추이"></svg></div>
+    <div class="legend"><span><i style="background:var(--asset)"></i>순자산</span><span><i style="background:var(--ink-3)"></i>총자산</span><span><i style="background:var(--debt)"></i>총부채</span></div>
+    <div class="empty" id="sEmpty">아직 기록이 없습니다. 월말에 <b>이번 달 기록 저장</b>을 누르면 그 달의 상태가 쌓입니다.</div>
+  </section>
+  <section class="panel"><h2>기록 내역</h2><div class="tw"><table id="tSnap"></table></div></section>
+</div>
+
+<!-- ═══ 시뮬 ═══ -->
+<div class="pane" id="p5" role="tabpanel" aria-labelledby="tb-p5">
+  <div class="note info" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <span>현황의 <b>마통 · 신용대출 · 현금성 · 투자(해외주식 포함) · 월 고정지출</b>을 시뮬레이터로 가져옵니다.</span>
+    <button class="btn" id="bPull">현황에서 값 가져오기</button>
+  </div>
+  <div class="simgrid">
+    <aside>
+      <section class="panel"><h2>현금흐름</h2><div class="pad">
+        <div class="grp"><div class="row">
+          <div class="fd"><label for="incomeM">월 실수령 소득</label><div class="wrapi"><input class="hasunit" id="incomeM" type="number" inputmode="decimal" step="1"><span class="unit">만원</span></div></div>
+          <div class="fd"><label for="expenseM">월 고정지출</label><div class="wrapi"><input class="hasunit" id="expenseM" type="number" inputmode="decimal" step="1"><span class="unit">만원</span></div></div>
+        </div><div class="derived"><span class="k">대출상환 전 월 여유자금</span><span class="v" id="dSurplus">-</span></div></div>
+        <div class="grp"><div class="row">
+          <div class="fd"><label for="startYm">시작 연월</label><input id="startYm" type="month"></div>
+          <div class="fd"><label for="months">기간</label><div class="wrapi"><input class="hasunit" id="months" type="number" inputmode="numeric" min="6" max="240" step="6"><span class="unit">개월</span></div></div>
+        </div></div>
+        <div class="grp"><div class="fd"><label for="otherAssets">기타 순자산 (부동산 등)</label><div class="wrapi"><input class="hasunit" id="otherAssets" type="number" inputmode="decimal" step="100"><span class="unit">만원</span></div></div></div>
+      </div></section>
+      <section class="panel"><h2>부채</h2><div class="pad">
+        <div class="grp"><div class="lg">마이너스통장</div>
+          <div class="row">
+            <div class="fd"><label for="mtBal">사용액</label><div class="wrapi"><input class="hasunit" id="mtBal" type="number" inputmode="decimal" step="10"><span class="unit">만원</span></div></div>
+            <div class="fd"><label for="mtLimit">한도</label><div class="wrapi"><input class="hasunit" id="mtLimit" type="number" inputmode="decimal" step="100"><span class="unit">만원</span></div></div>
+          </div>
+          <div class="row one" style="margin-top:7px"><div class="fd"><label for="mtRate">금리 (연)</label><div class="wrapi"><input class="hasunit" id="mtRate" type="number" inputmode="decimal" step="0.1"><span class="unit">%</span></div></div></div>
+        </div>
+        <div class="grp"><div class="lg">신용대출</div>
+          <div class="row">
+            <div class="fd"><label for="lnBal">잔액</label><div class="wrapi"><input class="hasunit" id="lnBal" type="number" inputmode="decimal" step="10"><span class="unit">만원</span></div></div>
+            <div class="fd"><label for="lnRate">금리 (연)</label><div class="wrapi"><input class="hasunit" id="lnRate" type="number" inputmode="decimal" step="0.1"><span class="unit">%</span></div></div>
+          </div>
+          <div class="row" style="margin-top:7px">
+            <div class="fd"><label for="lnType">상환 방식</label><select id="lnType"><option>원리금균등</option><option>만기일시</option></select></div>
+            <div class="fd"><label for="lnTerm">잔여 기간</label><div class="wrapi"><input class="hasunit" id="lnTerm" type="number" inputmode="numeric" step="1"><span class="unit">개월</span></div></div>
+          </div>
+          <div class="derived"><span class="k">월 필수 상환액</span><span class="v" id="dPmt">-</span></div>
+        </div>
+      </div></section>
+      <section class="panel"><h2>자산</h2><div class="pad">
+        <div class="grp"><div class="lg">파킹통장 (비상자금)</div>
+          <div class="row">
+            <div class="fd"><label for="pkBal">잔액</label><div class="wrapi"><input class="hasunit" id="pkBal" type="number" inputmode="decimal" step="10"><span class="unit">만원</span></div></div>
+            <div class="fd"><label for="pkTarget">목표액</label><div class="wrapi"><input class="hasunit" id="pkTarget" type="number" inputmode="decimal" step="50"><span class="unit">만원</span></div></div>
+          </div>
+          <div class="row one" style="margin-top:7px"><div class="fd"><label for="pkRate">금리 (연)</label><div class="wrapi"><input class="hasunit" id="pkRate" type="number" inputmode="decimal" step="0.1"><span class="unit">%</span></div></div></div>
+          <label class="chk"><input type="checkbox" id="pkTax"> 이자소득세 15.4% 반영</label>
+        </div>
+        <div class="grp"><div class="lg">투자 계좌</div>
+          <div class="row">
+            <div class="fd"><label for="ivBal">평가액</label><div class="wrapi"><input class="hasunit" id="ivBal" type="number" inputmode="decimal" step="100"><span class="unit">만원</span></div></div>
+            <div class="fd"><label for="ivRate">가정 수익률 (연)</label><div class="wrapi"><input class="hasunit" id="ivRate" type="number" inputmode="decimal" step="0.5"><span class="unit">%</span></div></div>
+          </div>
+        </div>
+      </div></section>
+      <section class="panel"><h2>배분 우선순위</h2><div class="pad">
+        <ul class="prio" id="prio"></ul>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn mini" data-preset="A">A안</button><button class="btn mini" data-preset="B">B안</button>
+          <button class="btn mini" data-preset="C">C안</button><button class="btn mini" data-preset="D">D안</button>
+        </div>
+      </div></section>
+      <section class="panel"><h2>목돈 유입</h2><div class="pad">
+        <div id="events"></div>
+        <button class="btn mini" id="bAddEvt" style="margin-top:4px">＋ 유입 항목</button>
+      </div></section>
+    </aside>
+    <main>
+      <div class="kpis">
+        <div class="kpi"><div class="k">마통 완제</div><div class="v mut" id="kMt">-</div><div class="s" id="kMtS">&nbsp;</div></div>
+        <div class="kpi"><div class="k">신용대출 완제</div><div class="v mut" id="kLn">-</div><div class="s" id="kLnS">&nbsp;</div></div>
+        <div class="kpi"><div class="k">비상자금 달성</div><div class="v mut" id="kPk">-</div><div class="s" id="kPkS">&nbsp;</div></div>
+        <div class="kpi"><div class="k">기간 총 이자</div><div class="v debt" id="kInt">-</div><div class="s" id="kIntS">&nbsp;</div></div>
+      </div>
+      <section class="panel">
+        <h2>상환 궤적</h2>
+        <div style="padding:8px 6px 4px"><svg class="chart" id="chart" viewBox="0 0 940 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="부채와 순자산 추이"></svg></div>
+        <div class="legend"><span><i style="background:var(--debt)"></i>총 부채</span><span><i style="background:var(--asset)"></i>순자산</span><span><i style="background:var(--accent)"></i>목돈 유입</span><span style="color:var(--ink-3)">단위: 만원</span></div>
+      </section>
+      <section class="panel">
+        <h2>배분 순서별 결과 비교</h2>
+        <div class="tw"><table id="cmp"></table></div>
+        <div class="note info flat">배분 순서만 다르고 나머지 조건은 같습니다. 총이자와 최종 순자산 중 어느 쪽이 유리한지는 가정 수익률에 따라 뒤집힙니다.</div>
+      </section>
+      <section class="panel">
+        <h2>기간 말 상태</h2>
+        <div class="tw"><table id="endt"></table></div>
+        <details><summary>월별 상세 내역</summary><div class="tw"><table id="monthly"></table></div></details>
+      </section>
+      <div class="note warn" id="warnbox" style="display:none"></div>
+    </main>
+  </div>
+</div>
+
+<div class="note info noprint">
+  <b>이 도구의 성격</b>
+  <ol>
+    <li>입력값에 대한 결정론적 계산기입니다. 시세·환율은 자동으로 가져오지 않습니다.</li>
+    <li>세금은 해외주식 양도세 추정과 파킹통장 이자소득세만 반영합니다. 배당세·재산세·건보료·중도상환수수료·금리 변동은 반영하지 않습니다.</li>
+    <li>재무·투자·세무 자문이 아닙니다. 실제 신고는 증권사 양도소득 자료와 홈택스를 기준으로 하십시오.</li>
+  </ol>
+</div>
+</div>
+
+<!-- ═══ 설정 시트 ═══ -->
+<div class="sheet-bg" id="setBg" aria-hidden="true">
+  <div class="sheetbox" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <header><h3 id="setTitle">설정 · 백업</h3><button class="btn mini" id="bSetClose">닫기</button></header>
+    <section>
+      <h4>자동 동기화 (GitHub 비공개 저장소)</h4>
+      <div class="stline" id="setStatus" data-s="local">이 기기에만 저장 중</div>
+      <div class="row">
+        <div class="fd"><label for="sOwner">GitHub 사용자명</label><input id="sOwner" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+        <div class="fd"><label for="sRepo">데이터 저장소</label><input id="sRepo" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="networth-data"></div>
+      </div>
+      <div class="row one" style="margin-top:8px">
+        <div class="fd"><label for="sToken">토큰 (Fine-grained)</label><input id="sToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
+          <span class="hint" id="sTokenHint">이 기기에만 저장되고 다시 표시되지 않습니다</span></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn primary" id="bSyncSave">저장하고 동기화</button>
+        <button class="btn" id="bSyncTest">연결 시험</button>
+        <button class="btn" id="bSyncNow">지금 동기화</button>
+        <button class="btn danger" id="bSyncOff">연결 해제</button>
+      </div>
+      <details style="margin-top:12px;border:1px solid var(--line-2);border-radius:6px">
+        <summary>처음 설정하는 방법</summary>
+        <ol class="steps" style="padding:0 16px 12px 30px">
+          <li>GitHub에서 <b>Private</b> 저장소 <code>networth-data</code>를 만듭니다 (README 체크).</li>
+          <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained 토큰 발급</a> → Repository access: <b>Only select repositories</b> → <code>networth-data</code> 하나만 선택.</li>
+          <li>Permissions → Repository permissions → <b>Contents: Read and write</b>. 나머지는 건드리지 않습니다.</li>
+          <li>발급된 토큰을 위 칸에 붙여넣고 <b>저장하고 동기화</b>. 기기마다 한 번씩 합니다.</li>
+          <li>토큰은 비밀번호 관리 앱에 보관하십시오. 기기를 바꾸거나 브라우저 데이터를 지우면 다시 입력해야 합니다.</li>
+        </ol>
+      </details>
+    </section>
+    <section>
+      <h4>이 기기</h4>
+      <div class="row">
+        <div class="fd"><label for="sDevice">기기 이름 (저장 기록에 표시)</label><input id="sDevice" type="text" autocomplete="off"></div>
+        <div class="fd"><label>기기 저장 상태</label><div class="stline" id="storeState" style="margin:0;padding:7px 9px">확인 중</div></div>
+      </div>
+    </section>
+    <section>
+      <h4>백업 · 가져오기</h4>
+      <input type="file" id="fileIn" accept=".json,application/json" hidden>
+      <div class="btnrow" style="margin-top:0">
+        <button class="btn" id="bLoad">파일 가져오기</button>
+        <button class="btn" id="bSave">JSON 내보내기</button>
+        <button class="btn" id="bCsv">CSV 내보내기</button>
+        <button class="btn" id="bPrint">인쇄</button>
+      </div>
+      <p class="hint" style="font-size:11px;color:var(--ink-3);margin:8px 0 0">가져오기는 현재 내용을 <b>통째로 바꿉니다.</b> 동기화가 켜져 있으면 다른 기기에도 반영됩니다.</p>
+    </section>
+    <section>
+      <h4>휴대폰에 설치</h4>
+      <ol class="steps">
+        <li><b>아이폰</b>: Safari로 이 주소 열기 → 공유 버튼 → <b>홈 화면에 추가</b></li>
+        <li><b>안드로이드</b>: Chrome 메뉴(⋮) → <b>앱 설치</b> 또는 <b>홈 화면에 추가</b></li>
+      </ol>
+      <p class="hint" style="font-size:11px;color:var(--ink-3);margin:8px 0 0" id="appVer"></p>
+    </section>
+  </div>
+</div>
+
+<!-- ═══ 충돌 시트 ═══ -->
+<div class="sheet-bg" id="cfBg" aria-hidden="true">
+  <div class="sheetbox" role="dialog" aria-modal="true" aria-labelledby="cfTitle">
+    <header><h3 id="cfTitle">두 기기에서 모두 수정됨</h3></header>
+    <section>
+      <p style="margin:0;font-size:13px;color:var(--ink-2)">마지막 동기화 이후 이 기기와 다른 기기에서 각각 내용이 바뀌었습니다. 남길 쪽을 고르십시오. 고르지 않은 쪽 내용은 사라지니, 헷갈리면 먼저 <b>이 기기 내용 파일로 저장</b>을 누르십시오.</p>
+      <div class="cf">
+        <div><div class="k">이 기기</div><div class="v" id="cfMine">-</div><div class="s" id="cfMineS">&nbsp;</div></div>
+        <div><div class="k">다른 기기</div><div class="v" id="cfTheirs">-</div><div class="s" id="cfTheirsS">&nbsp;</div></div>
+      </div>
+      <ul class="cfdiff" id="cfDiff"></ul>
+      <div class="btnrow">
+        <button class="btn primary" id="bCfMine">이 기기 것 남기기</button>
+        <button class="btn primary" id="bCfTheirs">다른 기기 것 받기</button>
+        <button class="btn" id="bCfBackup">이 기기 내용 파일로 저장</button>
+        <button class="btn" id="bCfLater">나중에</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/engine.js?v=2.0.0"></script>
+<script src="js/holdings.js?v=2.0.0"></script>
+<script src="js/networth.js?v=2.0.0"></script>
+<script src="js/sync.js?v=2.0.0"></script>
+<script src="js/app.js?v=2.0.0"></script>
+</body>
+</html>
